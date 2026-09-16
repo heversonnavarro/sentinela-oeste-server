@@ -80,9 +80,14 @@ def classify(track,ctx):
     mscore,mr=meteo_score(ctx)
 
     total=clamp(cs+oscore+mscore)
-    # Gate de segurança: vermelho exige evidência independente forte.
+    # Gates: trajetória sozinha não deve elevar uma célula enfraquecendo a LARANJA.
     independent_strong=(strongest>=3)
-    radar_strong=bool(cell and cell.get("intercepts_protection_zone") and cell.get("confidence",0)>=75)
+    trend=(cell.get("trend_percent",0) if cell else 0)
+    radar_strong=bool(cell and cell.get("intercepts_protection_zone") and
+                      cell.get("confidence",0)>=75 and trend>=-10)
+    radar_preparation=bool(cell and cell.get("intercepts_protection_zone") and
+                           cell.get("confidence",0)>=50 and trend>=-10)
+
     if total>=75 and radar_strong and independent_strong:
         level="VERMELHO";emoji="🔴"
     elif total>=50 and (radar_strong or strongest>=3):
@@ -92,10 +97,12 @@ def classify(track,ctx):
     else:
         level="VERDE";emoji="🟢"
 
-    # Casa de madeira: antecipa PREPARAÇÃO, mas não reduz gate do vermelho.
-    if level=="AMARELO" and total>=42 and cell and cell.get("intercepts_protection_zone"):
+    # Casa de madeira: preparação antecipada só se o eco não estiver enfraquecendo claramente.
+    if level=="AMARELO" and total>=42 and radar_preparation:
         level="LARANJA";emoji="🟠"
         cr.append("limiar de preparação conservador para residência de madeira")
+    elif level=="AMARELO" and cell and cell.get("intercepts_protection_zone") and trend < -10:
+        cr.append("eco em enfraquecimento: mantido em observação, sem elevar preparação")
 
     return {
       "version":"0.4","generated_utc":datetime.now(timezone.utc).isoformat(),
