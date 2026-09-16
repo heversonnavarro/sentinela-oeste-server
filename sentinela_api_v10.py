@@ -1,15 +1,11 @@
-"""
-SENTINELA OESTE 1.0 EXPERIMENTAL — API local
-Executa o pipeline periodicamente e expõe /status para o aplicativo.
-Somente biblioteca padrão + dependências já usadas pelo motor.
-"""
 import json, subprocess, sys, threading, time, os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse
 
 BASE=Path(__file__).parent
 RESULT=BASE/"sentinela_risco_v04.json"
-INTERVAL=600  # 10 min
+INTERVAL=600
 
 def run_pipeline():
     while True:
@@ -22,19 +18,22 @@ def run_pipeline():
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.rstrip("/")!="/status":
-            self.send_response(404);self.end_headers();return
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path != "/status":
+            self.send_response(404); self.end_headers(); return
         try:
             data=json.loads(RESULT.read_text(encoding="utf-8")) if RESULT.exists() else {
               "version":"1.0-exp","level":"INICIALIZANDO","emoji":"⚪","score":0,
               "reasons":["Pipeline ainda não concluiu a primeira análise."]
             }
             body=json.dumps(data,ensure_ascii=False).encode()
-            self.send_response(200);self.send_header("Content-Type","application/json; charset=utf-8")
-            self.send_header("Cache-Control","no-store");self.send_header("Content-Length",str(len(body)))
-            self.end_headers();self.wfile.write(body)
+            self.send_response(200)
+            self.send_header("Content-Type","application/json; charset=utf-8")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Length",str(len(body)))
+            self.end_headers(); self.wfile.write(body)
         except Exception as e:
-            self.send_response(500);self.end_headers();self.wfile.write(str(e).encode())
+            self.send_response(500); self.end_headers(); self.wfile.write(str(e).encode())
     def log_message(self,fmt,*args): pass
 
 if __name__=="__main__":
